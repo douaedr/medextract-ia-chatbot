@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Env & secrets
+.env
+!.env.example
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+
+# Uploads & modeles (volumineux)
+uploads/
+model/
+*.pth
+_train_tmp/
+dataset/images/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
