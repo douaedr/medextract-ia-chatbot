@@ -1,0 +1,147 @@
+# ============================================================================
+# MedExtract AI - Orchestration complete des 6 microservices
+# Responsable : DEV 1 (Infrastructure & Auth)
+# Lancement : docker compose up --build
+# ============================================================================
+services:
+
+  # ------------------------- INFRASTRUCTURE -------------------------
+  postgres:
+    image: postgres:16
+    container_name: medextract_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Cree automatiquement TOUTES les tables au premier demarrage
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [medextract]
+
+  # ------------------------- MICROSERVICES -------------------------
+  auth-service:
+    build: ./services/auth-service
+    container_name: medextract_auth
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    networks: [medextract]
+
+  # --- Services des autres developpeuses (memes noms de service/reseau) ---
+  # DEV 2
+  document-service:
+    build: ../dev2/services/document-service
+    container_name: medextract_document
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      postgres: { condition: service_healthy }
+    ports: ["8082:8082"]
+    networks: [medextract]
+
+  ocr-service:
+    build: ../dev2/services/ocr-service
+    container_name: medextract_ocr
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      postgres: { condition: service_healthy }
+    ports: ["8083:8083"]
+    networks: [medextract]
+
+  # DEV 3
+  ai-service:
+    build: ../dev3/services/ai-service
+    container_name: medextract_ai
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - uploads:/app/uploads
+      - models:/app/model
+    depends_on:
+      postgres: { condition: service_healthy }
+    ports: ["8084:8084"]
+    networks: [medextract]
+
+  chatbot-service:
+    build: ../dev3/services/chatbot-service
+    container_name: medextract_chatbot
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    # Permet au conteneur de joindre Ollama qui tourne sur la machine hote
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres: { condition: service_healthy }
+    ports: ["8085:8085"]
+    networks: [medextract]
+
+  # DEV 4
+  reporting-service:
+    build: ../dev4/services/reporting-service
+    container_name: medextract_reporting
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    depends_on:
+      postgres: { condition: service_healthy }
+    ports: ["8086:8086"]
+    networks: [medextract]
+
+  frontend:
+    build: ../dev4/frontend
+    container_name: medextract_frontend
+    restart: unless-stopped
+    ports: ["3000:80"]
+    depends_on: [nginx]
+    networks: [medextract]
+
+  # ------------------------- API GATEWAY -------------------------
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: medextract_gateway
+    restart: unless-stopped
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8080:80"   # Toutes les APIs passent par http://localhost:8080/api/...
+    depends_on:
+      - auth-service
+    networks: [medextract]
+
+volumes:
+  pgdata:
+  uploads:
+  models:
+
+networks:
+  medextract:
+    driver: bridge
