@@ -1,0 +1,48 @@
+# ============================================================================
+# DEV 3 - Lancer UNIQUEMENT AI + Chatbot (+ Postgres) pour developper en solo
+# Utilise le schema partage de DEV 1 (../dev1/database/init.sql).
+# Necessite les 4 dossiers cote a cote (dev1 dev2 dev3 dev4) pour l'init.sql.
+# Lancement :  docker compose -f docker-compose.dev3.yml up --build
+# ============================================================================
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: medextract
+      POSTGRES_PASSWORD: medextract
+      POSTGRES_DB: medextract
+    volumes:
+      - ../dev1/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medextract"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ai-service:
+    build: ./services/ai-service
+    environment:
+      DATABASE_URL: postgresql://medextract:medextract@postgres:5432/medextract
+      JWT_SECRET_KEY: dev-secret-change-me
+    volumes:
+      - models:/app/model      # modele LayoutLMv3 entraine (optionnel)
+    depends_on:
+      postgres: { condition: service_healthy }
+    ports: ["8084:8084"]
+
+  chatbot-service:
+    build: ./services/chatbot-service
+    environment:
+      DATABASE_URL: postgresql://medextract:medextract@postgres:5432/medextract
+      JWT_SECRET_KEY: dev-secret-change-me
+      # Ollama tourne sur la machine hote (voir README) :
+      OLLAMA_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres: { condition: service_healthy }
+    ports: ["8085:8085"]
+
+volumes:
+  models:
