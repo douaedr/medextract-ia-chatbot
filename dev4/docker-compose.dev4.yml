@@ -1,0 +1,30 @@
+# ============================================================================
+# DEV 4 - Lancer UNIQUEMENT Reporting (+ Postgres) pour developper en solo.
+# Le frontend se lance a part avec "npm run dev" (voir README).
+# Utilise le schema partage de DEV 1 (../dev1/database/init.sql).
+# Lancement :  docker compose -f docker-compose.dev4.yml up --build
+# ============================================================================
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: medextract
+      POSTGRES_PASSWORD: medextract
+      POSTGRES_DB: medextract
+    volumes:
+      - ../dev1/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medextract"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  reporting-service:
+    build: ./services/reporting-service
+    environment:
+      DATABASE_URL: postgresql://medextract:medextract@postgres:5432/medextract
+      JWT_SECRET_KEY: dev-secret-change-me
+    depends_on:
+      postgres: { condition: service_healthy }
+    ports: ["8086:8086"]
