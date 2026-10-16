@@ -9,4 +9,3 @@ AI-based information extraction from medical documents (Python).
 - `dev1/` - infrastructure and authentication part, including the database initialisation script.
 - `services/ai-service/` - AI service (API routers and model training scripts, including a LayoutLMv3 training script).
 
-<!-- TO VERIFY: pipeline description, supported document types, how to run, contributors and their parts -->
